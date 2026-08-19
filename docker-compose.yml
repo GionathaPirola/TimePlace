@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: timeplace-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: timeplace
+      POSTGRES_USER: timeplace
+      POSTGRES_PASSWORD: timeplace
+    ports:
+      - "5432:5432"
+    volumes:
+      - timeplace_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U timeplace -d timeplace"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Only started with `docker compose --profile full up --build` (Phase 7: containerized deploy).
+  # Day-to-day dev still uses `docker compose up -d` (db only) + `mvn spring-boot:run` + `npm run dev`.
+  backend:
+    build: ./backend
+    container_name: timeplace-backend
+    profiles: ["full"]
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: timeplace
+      DB_USER: timeplace
+      DB_PASSWORD: timeplace
+      EUROPEANA_API_KEY: ${EUROPEANA_API_KEY:-}
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8080/api
+    container_name: timeplace-frontend
+    profiles: ["full"]
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  timeplace_pgdata:
